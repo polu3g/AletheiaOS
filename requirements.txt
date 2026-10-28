@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+rdflib
+owlready2
+pyshacl
+z3-solver
+sqlalchemy
+pydantic
+pytest

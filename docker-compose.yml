@@ -1,0 +1,5 @@
+services:
+  rdf4j:
+    image: eclipse/rdf4j-workbench
+    ports:
+      - "8080:8080"
