@@ -1,1 +1,55 @@
-@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix ale:  <http://aletheia.ai/ontology#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+# ──────────────────────────────────────────────────────────────
+#  Observation Shape
+# ──────────────────────────────────────────────────────────────
+
+ale:ObservationShape
+    a sh:NodeShape ;
+    sh:targetClass ale:Observation ;
+    sh:property [
+        sh:path ale:timestamp ;
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:message "An Observation must have at most one xsd:dateTime timestamp." ;
+    ] ;
+    sh:property [
+        sh:path ale:rawText ;
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:message "An Observation must have at most one rawText string value." ;
+    ] .
+
+# ──────────────────────────────────────────────────────────────
+#  Inference Shape
+# ──────────────────────────────────────────────────────────────
+
+ale:InferenceShape
+    a sh:NodeShape ;
+    sh:targetClass ale:Inference ;
+    sh:property [
+        sh:path ale:confidence ;
+        sh:datatype xsd:float ;
+        sh:minInclusive 0.0 ;
+        sh:maxInclusive 1.0 ;
+        sh:maxCount 1 ;
+        sh:message "Confidence must be a float in [0.0, 1.0]." ;
+    ] .
+
+# ──────────────────────────────────────────────────────────────
+#  Plan Shape
+# ──────────────────────────────────────────────────────────────
+
+ale:PlanShape
+    a sh:NodeShape ;
+    sh:targetClass ale:Plan ;
+    sh:property [
+        sh:path ale:requiresAction ;
+        sh:minCount 1 ;
+        sh:message "A Plan must require at least one Action." ;
+    ] .

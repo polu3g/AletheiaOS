@@ -1,5 +1,43 @@
+version: "3.9"
+
 services:
+  # ── AletheiaOS API ───────────────────────────────────────────────────────────
+  app:
+    build: .
+    image: aletheia-os:latest
+    container_name: aletheia_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./ontology:/app/ontology
+    environment:
+      DATABASE_URL: sqlite:///./data/aletheia.db
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+      ONTOLOGY_PATH: /app/ontology/aletheia.owl
+      SHAPES_PATH: /app/ontology/shapes.ttl
+      RDF_STORE_PATH: /app/data/rdf_store.ttl
+    depends_on:
+      - rdf4j
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── RDF4J Workbench (optional SPARQL endpoint) ───────────────────────────────
   rdf4j:
-    image: eclipse/rdf4j-workbench
+    image: eclipse/rdf4j-workbench:latest
+    container_name: aletheia_rdf4j
     ports:
       - "8080:8080"
+    volumes:
+      - rdf4j_data:/var/rdf4j
+    restart: unless-stopped
+
+volumes:
+  rdf4j_data:
