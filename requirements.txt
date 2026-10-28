@@ -15,9 +15,18 @@ sqlalchemy>=2.0.30
 rdflib>=7.0.0
 owlready2>=0.46
 pyshacl>=0.26.0
+owlrl>=6.0.2
 
 # Constraint solving
 z3-solver>=4.12.0
+
+# Knowledge graph enrichment
+SPARQLWrapper>=2.0.0
+networkx>=3.3.0
+scipy>=1.13.0
+numpy>=1.26.0
+beautifulsoup4>=4.12.0
+requests>=2.32.0
 
 # Testing
 pytest>=8.0.0

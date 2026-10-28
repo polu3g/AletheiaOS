@@ -326,6 +326,149 @@ class WorldStateResponse(BaseModel):
     last_updated: datetime | None
 
 
+# ── Knowledge — Enrichment ───────────────────────────────────────────────────
+
+class WikidataEnrichRequest(BaseModel):
+    mode: str = Field(
+        "preset",
+        description="'preset' runs a built-in domain query; 'custom' runs your own SPARQL.",
+    )
+    preset: str | None = Field(
+        None,
+        description=(
+            "Built-in preset name. Options: road_conditions, weather_phenomena, "
+            "traffic_incidents, emergency_services."
+        ),
+    )
+    custom_sparql: str | None = Field(
+        None,
+        description="Custom Wikidata SPARQL (used when mode='custom').",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"mode": "preset", "preset": "road_conditions"}}
+    )
+
+
+class ConceptNetEnrichRequest(BaseModel):
+    concept: str = Field(
+        ...,
+        description="English concept to look up (e.g. 'road', 'fog', 'emergency').",
+    )
+    limit: int = Field(50, ge=1, le=200)
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"concept": "road", "limit": 50}}
+    )
+
+
+class ConceptNetRelationRequest(BaseModel):
+    relation: str = Field(
+        ...,
+        description="ConceptNet relation type (e.g. 'Causes', 'IsA', 'UsedFor', 'HasProperty').",
+    )
+    start_concept: str | None = Field(None)
+    limit: int = Field(50, ge=1, le=200)
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"relation": "Causes", "start_concept": "fog", "limit": 30}}
+    )
+
+
+class URLEnrichRequest(BaseModel):
+    url: str = Field(..., description="URL to fetch and extract JSON-LD / RDFa structured data from.")
+    timeout_seconds: int = Field(15, ge=5, le=60)
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"url": "https://schema.org/TrafficConditions", "timeout_seconds": 15}}
+    )
+
+
+class BulkLoadRequest(BaseModel):
+    turtle: str = Field(..., description="RDF data in Turtle format to load into the knowledge graph.")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "turtle": (
+                    "@prefix ale: <http://aletheia.ai/ontology#> .\n"
+                    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+                    "ale:black_ice a ale:RoadCondition ;\n"
+                    '    rdfs:label "Black Ice" ;\n'
+                    "    ale:requiresAction ale:reduce_speed ."
+                )
+            }
+        }
+    )
+
+
+# ── Knowledge — Reasoning ────────────────────────────────────────────────────
+
+class CustomRuleRequest(BaseModel):
+    name: str = Field(..., description="Human-readable rule name.")
+    construct_query: str = Field(..., description="SPARQL CONSTRUCT query that derives new triples.")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "night_driving_requires_lights",
+                "construct_query": (
+                    "CONSTRUCT { ?obs ale:requiresAction ale:activate_headlights }\n"
+                    "WHERE { ?obs a ale:Observation ; ale:hasInference ale:low_visibility . }"
+                ),
+            }
+        }
+    )
+
+
+# ── Knowledge — Graph Analytics ──────────────────────────────────────────────
+
+class PathRequest(BaseModel):
+    source: str = Field(..., description="Source entity (ale: prefixed or full URI).", examples=["ale:road_slippery"])
+    target: str = Field(..., description="Target entity.", examples=["ale:reduce_speed"])
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"source": "ale:road_slippery", "target": "ale:reduce_speed"}}
+    )
+
+
+# ── Knowledge — NL Query ─────────────────────────────────────────────────────
+
+class NLQueryRequest(BaseModel):
+    question: str = Field(
+        ...,
+        description="Natural language question answered by SPARQL template matching (no LLM).",
+        min_length=3,
+        max_length=500,
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"question": "What actions should I take for a slippery road?"}}
+    )
+
+
+class FederatedQueryRequest(BaseModel):
+    local_sparql: str = Field(..., description="SPARQL SELECT to run against the local KG.")
+    external_endpoint: str = Field(
+        "https://query.wikidata.org/sparql",
+        description="External SPARQL endpoint to also query.",
+    )
+    external_sparql: str | None = Field(
+        None,
+        description="SPARQL for the external endpoint. Defaults to local_sparql if None.",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "local_sparql": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 5",
+                "external_endpoint": "https://query.wikidata.org/sparql",
+                "external_sparql": "SELECT ?item ?itemLabel WHERE { ?item wdt:P31 wd:Q2996394 . SERVICE wikibase:label { bd:serviceParam wikibase:language 'en' } } LIMIT 10",
+            }
+        }
+    )
+
+
 # ─── System ──────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):

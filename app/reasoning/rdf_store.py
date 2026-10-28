@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.plugins.sparql import prepareQuery
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +21,14 @@ class RDFStore:
     """
 
     _PREFIXES = (
-        "PREFIX ale: <http://aletheia.ai/ontology#>\n"
-        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
+        "PREFIX ale:  <http://aletheia.ai/ontology#>\n"
+        "PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
         "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n"
-        "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n"
-        "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n"
+        "PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>\n"
+        "PREFIX owl:  <http://www.w3.org/2002/07/owl#>\n"
+        "PREFIX wd:   <http://www.wikidata.org/entity/>\n"
+        "PREFIX wdt:  <http://www.wikidata.org/prop/direct/>\n"
+        "PREFIX cn:   <http://conceptnet.io/c/en/>\n"
     )
 
     def __init__(self) -> None:
@@ -35,6 +37,9 @@ class RDFStore:
         self.graph.bind("owl", OWL)
         self.graph.bind("rdfs", RDFS_NS)
         self.graph.bind("xsd", XSD)
+        self.graph.bind("wd", Namespace("http://www.wikidata.org/entity/"))
+        self.graph.bind("wdt", Namespace("http://www.wikidata.org/prop/direct/"))
+        self.graph.bind("cn", Namespace("http://conceptnet.io/c/en/"))
         logger.info("RDF store initialized (%d triples)", len(self.graph))
 
     def load_ontology(self, path: str | Path) -> None:
@@ -94,9 +99,39 @@ class RDFStore:
     def serialize_turtle(self) -> str:
         return self.graph.serialize(format="turtle")
 
+    def save(self, path: str | Path) -> int:
+        """Persist the knowledge graph to a Turtle file. Returns triple count."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self.graph.serialize(destination=str(p), format="turtle")
+        logger.info("KG persisted to %s (%d triples)", p, len(self.graph))
+        return len(self.graph)
+
+    def load_file(self, path: str | Path) -> int:
+        """Load additional triples from a Turtle / N-Triples / RDF file."""
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"{path} does not exist")
+        before = len(self.graph)
+        fmt = "xml" if p.suffix == ".owl" else "turtle"
+        self.graph.parse(str(p), format=fmt)
+        added = len(self.graph) - before
+        logger.info("Loaded %d triples from %s", added, p)
+        return added
+
     def _resolve(self, term: str) -> URIRef:
-        if term.startswith("ale:"):
-            return ALE[term[4:]]
+        _NS = {
+            "ale:":  ALE,
+            "wd:":   Namespace("http://www.wikidata.org/entity/"),
+            "wdt:":  Namespace("http://www.wikidata.org/prop/direct/"),
+            "cn:":   Namespace("http://conceptnet.io/c/en/"),
+            "rdfs:": RDFS_NS,
+            "owl:":  OWL,
+            "rdf:":  RDF_NS,
+        }
+        for prefix, ns in _NS.items():
+            if term.startswith(prefix):
+                return ns[term[len(prefix):]]
         if term.startswith("http://") or term.startswith("https://"):
             return URIRef(term)
         return ALE[term]

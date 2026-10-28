@@ -1,8 +1,8 @@
 # AletheiaOS
 
-**Enterprise-grade neuro-symbolic cognitive architecture.**
+**Enterprise-grade neuro-symbolic cognitive architecture — pure knowledge graph, no LLM.**
 
-AletheiaOS integrates rule-based perception, persistent episodic and semantic memory, formal constraint solving (Z3), SHACL ontology validation, RDF/OWL knowledge graphs, and goal-directed planning — all served through a production-ready FastAPI REST layer with full Swagger documentation.
+AletheiaOS integrates rule-based perception, persistent episodic and semantic memory, formal constraint solving (Z3), SHACL ontology validation, RDF/OWL knowledge graphs, goal-directed planning, and a full knowledge enrichment pipeline (Wikidata, ConceptNet, URL JSON-LD/RDFa, bulk Turtle, SPARQL CONSTRUCT rules, OWL-RL reasoning, graph analytics, and template-based NL query) — all served through a production-ready FastAPI REST layer with full Swagger documentation.
 
 ---
 
@@ -19,6 +19,16 @@ AletheiaOS integrates rule-based perception, persistent episodic and semantic me
 | **Goal Planner** | Maps inferences to prioritised, context-aware action sequences |
 | **World Model** | Key-value environment state, persisted to database |
 | **Trace Logging** | Full per-request processing records with timing |
+| **Wikidata Enrichment** | Fetches structured linked data from Wikidata's public SPARQL endpoint |
+| **ConceptNet Enrichment** | Loads commonsense knowledge edges (IsA, Causes, UsedFor, …) from ConceptNet |
+| **URL Enrichment** | Extracts JSON-LD and RDFa structured metadata from any web page |
+| **Bulk Loader** | Merges arbitrary Turtle / N-Triples / RDF-XML files into the graph |
+| **CONSTRUCT Rule Engine** | 10 built-in + unlimited custom SPARQL CONSTRUCT rules; derives new triples |
+| **OWL-RL Reasoner** | OWL-RL entailment closure via owlrl (pure Python, no Java) |
+| **Graph Analytics** | PageRank, degree centrality, shortest path, ego-subgraph, neighbourhood BFS |
+| **Template NL Query** | Answers plain-English questions via 11 SPARQL templates — no LLM |
+| **Federated SPARQL** | Joins local KG results with any external SPARQL endpoint in one request |
+| **KG Persistence** | Save / reload the knowledge graph to/from Turtle files |
 
 ---
 
@@ -38,7 +48,8 @@ AletheiaOS/
 │   │   ├── memory.py           Episodic and semantic memory endpoints
 │   │   ├── reasoning.py        Z3, SHACL, and RDF endpoints
 │   │   ├── planning.py         Goal planner endpoints
-│   │   └── world.py            World model endpoints
+│   │   ├── world.py            World model endpoints
+│   │   └── knowledge.py        Knowledge graph enrichment / reasoning / analytics
 │   ├── cognitive/engine.py     Full cognitive pipeline orchestration
 │   ├── memory/
 │   │   ├── episodic.py         EpisodicMemoryService
@@ -47,7 +58,12 @@ AletheiaOS/
 │   ├── reasoning/
 │   │   ├── z3_engine.py        ConstraintEngine (Z3 theorem prover)
 │   │   ├── shacl_validator.py  SHACLValidator (pyshacl)
-│   │   └── rdf_store.py        RDFStore (rdflib + SPARQL)
+│   │   └── rdf_store.py        RDFStore (rdflib + SPARQL + save/load)
+│   ├── knowledge/
+│   │   ├── enrichment.py       Wikidata, ConceptNet, URL, BulkLoader
+│   │   ├── reasoner.py         RuleEngine (CONSTRUCT rules), OWLReasoner
+│   │   ├── graph_analytics.py  GraphAnalyzer (networkx: PageRank, paths, …)
+│   │   └── query_templates.py  TemplateQueryEngine (11 NL→SPARQL templates)
 │   ├── logging/trace.py        TraceService
 │   └── world_model/state.py    WorldModelService
 ├── tests/
@@ -55,7 +71,8 @@ AletheiaOS/
 │   ├── test_engine.py          Cognitive engine unit tests
 │   ├── test_memory.py          Memory service tests
 │   ├── test_reasoning.py       Z3, RDF, and planner tests
-│   └── test_api.py             Full API integration tests (71 tests)
+│   ├── test_api.py             API integration tests
+│   └── test_knowledge.py       Knowledge module tests (62 tests)
 ├── ontology/
 │   ├── aletheia.owl            OWL ontology for the cognitive domain
 │   └── shapes.ttl              SHACL constraint shapes
@@ -126,8 +143,8 @@ make docker-up
 ## Running Tests
 
 ```bash
-make test           # all 71 tests
-make test-unit      # engine, memory, reasoning only
+make test           # all 133 tests
+make test-unit      # engine, memory, reasoning, knowledge only
 make test-api       # API integration tests only
 make test-cov       # with HTML coverage report → htmlcov/index.html
 ```
@@ -425,6 +442,117 @@ Try all goals: `road_slippery`, `traffic_congestion`, `obstacle_detected`, `emer
 
 ---
 
+### Step 9 — Knowledge Graph Enrichment (Pure KG — No LLM)
+
+The knowledge module expands the RDF graph from external sources and enables graph-level analytics and natural language querying — all without any language model.
+
+#### 9a. Bulk-load custom domain facts
+
+**`POST /api/v1/knowledge/enrich/bulk`**
+```json
+{
+  "turtle": "@prefix ale: <http://aletheia.ai/ontology#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\nale:black_ice a ale:RoadCondition ;\n    rdfs:label \"Black Ice\" ;\n    ale:requiresAction ale:reduce_speed ."
+}
+```
+Adds your own Turtle triples directly to the knowledge graph.
+
+#### 9b. Enrich from Wikidata
+
+**`GET /api/v1/knowledge/enrich/wikidata/presets`** — list available preset queries.
+
+**`POST /api/v1/knowledge/enrich/wikidata`** (requires internet)
+```json
+{ "mode": "preset", "preset": "road_conditions" }
+```
+Fetches Wikidata entities tagged as road-surface conditions and loads them as linked triples.
+
+#### 9c. Enrich from ConceptNet
+
+**`POST /api/v1/knowledge/enrich/conceptnet`** (requires internet)
+```json
+{ "concept": "fog", "limit": 30 }
+```
+Adds commonsense edges like `fog IsA weather_condition`, `fog Causes low_visibility`.
+
+#### 9d. Apply SPARQL CONSTRUCT rules
+
+**`GET /api/v1/knowledge/reason/rules`** — see all 10 built-in rules.
+
+**`POST /api/v1/knowledge/reason/rules/apply-all`** — derive all inferences.
+
+Expected: rules like `slippery_road_requires_speed_reduction` fire on existing observations, adding `requiresAction`, `hasPriority`, `compoundRiskWith` triples.
+
+**Apply a single rule:**
+
+`POST /api/v1/knowledge/reason/rules/apply/slippery_road_requires_speed_reduction`
+
+**Apply a custom CONSTRUCT rule:**
+
+`POST /api/v1/knowledge/reason/rules/custom`
+```json
+{
+  "name": "mark_night_driving_critical",
+  "construct_query": "CONSTRUCT { ?obs ale:hasPriority ale:CRITICAL }\nWHERE { ?obs a ale:Observation ; ale:hasInference ale:low_visibility . }"
+}
+```
+
+#### 9e. Graph Analytics
+
+After enrichment, run structural analysis:
+
+| Endpoint | What it shows |
+|----------|--------------|
+| `GET /api/v1/knowledge/graph/stats` | Node/edge counts, density, components |
+| `GET /api/v1/knowledge/graph/pagerank?top_n=10` | Most semantically central entities |
+| `GET /api/v1/knowledge/graph/hubs?top_n=10` | Highest-degree (most-connected) nodes |
+| `GET /api/v1/knowledge/graph/neighbors?entity=ale:road_slippery&depth=2` | 2-hop neighbourhood |
+| `GET /api/v1/knowledge/graph/subgraph?entity=ale:emergency_alert&depth=2` | Ego-subgraph for visualisation |
+| `POST /api/v1/knowledge/graph/path` | Shortest semantic path between two entities |
+
+**Path example:**
+
+`POST /api/v1/knowledge/graph/path`
+```json
+{ "source": "ale:obs001", "target": "ale:reduce_speed" }
+```
+Returns the chain: `obs001 → hasInference → road_slippery → requiresAction → reduce_speed`
+
+#### 9f. Natural Language Query (template-based, no LLM)
+
+**`GET /api/v1/knowledge/query/templates`** — list all 11 query templates.
+
+**`POST /api/v1/knowledge/query/natural`**
+
+Try any of these questions:
+```json
+{ "question": "What actions are required for slippery road?" }
+```
+```json
+{ "question": "Find connected linked related neighbors of emergency_alert" }
+```
+```json
+{ "question": "Most certain reliable confident results" }
+```
+```json
+{ "question": "Give a breakdown summary statistics count by type" }
+```
+```json
+{ "question": "Are there compound risk situations?" }
+```
+```json
+{ "question": "What named entities are in the knowledge graph?" }
+```
+
+The response includes the matched template name and the generated SPARQL query for full transparency.
+
+#### 9g. Persist / reload the knowledge graph
+
+**`POST /api/v1/knowledge/persist/save`** — serialise the graph to `rdf_store_path`.
+
+**`POST /api/v1/knowledge/persist/load`** — reload from the saved Turtle file.
+
+---
+
 ### Full End-to-End Test Sequence
 
 Run these calls in order to exercise the full system:
@@ -438,8 +566,13 @@ Run these calls in order to exercise the full system:
 7. `POST /api/v1/reasoning/z3/optimize-speed` — compute max safe speed
 8. `POST /api/v1/reasoning/z3/consistency-check` — verify logic
 9. `POST /api/v1/reasoning/rdf/query` — SPARQL over knowledge graph
-10. `GET /api/v1/world/state` — see environment state after processing
-11. `GET /api/v1/status` — final system stats
+10. `POST /api/v1/knowledge/enrich/bulk` — add custom Turtle facts
+11. `POST /api/v1/knowledge/reason/rules/apply-all` — derive new triples via CONSTRUCT rules
+12. `GET /api/v1/knowledge/graph/pagerank` — find semantically central entities
+13. `POST /api/v1/knowledge/query/natural` — ask a question in plain English
+14. `POST /api/v1/knowledge/persist/save` — save the enriched graph
+15. `GET /api/v1/world/state` — see environment state after processing
+16. `GET /api/v1/status` — final system stats
 
 ---
 
@@ -471,6 +604,34 @@ Run these calls in order to exercise the full system:
 | GET | `/api/v1/world/state` | World model state |
 | POST | `/api/v1/world/update` | Merge state updates |
 | DELETE | `/api/v1/world/reset` | Reset world model |
+| **Knowledge — Enrichment** | | |
+| POST | `/api/v1/knowledge/enrich/wikidata` | Enrich from Wikidata (preset or custom SPARQL) |
+| POST | `/api/v1/knowledge/enrich/conceptnet` | Enrich from ConceptNet (concept lookup) |
+| POST | `/api/v1/knowledge/enrich/conceptnet/relation` | Enrich by ConceptNet relation type |
+| POST | `/api/v1/knowledge/enrich/url` | Extract JSON-LD / RDFa from a URL |
+| POST | `/api/v1/knowledge/enrich/bulk` | Load Turtle string into the graph |
+| GET | `/api/v1/knowledge/enrich/wikidata/presets` | List built-in Wikidata preset queries |
+| **Knowledge — Reasoning** | | |
+| POST | `/api/v1/knowledge/reason/rules/apply-all` | Apply all 10 built-in CONSTRUCT rules |
+| POST | `/api/v1/knowledge/reason/rules/apply/{name}` | Apply a single named rule |
+| POST | `/api/v1/knowledge/reason/rules/custom` | Apply a custom CONSTRUCT query |
+| GET | `/api/v1/knowledge/reason/rules` | List all built-in and custom rules |
+| POST | `/api/v1/knowledge/reason/owl` | OWL-RL entailment closure |
+| POST | `/api/v1/knowledge/reason/rdfs` | RDFS-only closure |
+| **Knowledge — Graph Analytics** | | |
+| GET | `/api/v1/knowledge/graph/stats` | Graph structure statistics |
+| GET | `/api/v1/knowledge/graph/pagerank` | PageRank entity ranking |
+| GET | `/api/v1/knowledge/graph/hubs` | Degree centrality hub ranking |
+| GET | `/api/v1/knowledge/graph/neighbors` | BFS neighbourhood of an entity |
+| GET | `/api/v1/knowledge/graph/subgraph` | Ego-subgraph for visualisation |
+| POST | `/api/v1/knowledge/graph/path` | Shortest semantic path between entities |
+| **Knowledge — Query** | | |
+| POST | `/api/v1/knowledge/query/natural` | NL question answered by template SPARQL |
+| GET | `/api/v1/knowledge/query/templates` | List all 11 query templates |
+| POST | `/api/v1/knowledge/query/federated` | Local KG + external SPARQL endpoint |
+| **Knowledge — Persistence** | | |
+| POST | `/api/v1/knowledge/persist/save` | Save graph to Turtle file |
+| POST | `/api/v1/knowledge/persist/load` | Load graph from saved file |
 
 ---
 
@@ -485,6 +646,7 @@ All settings can be overridden via `.env` or environment variables:
 | `LOG_LEVEL` | `INFO` | Python log level |
 | `ONTOLOGY_PATH` | `ontology/aletheia.owl` | OWL ontology file path |
 | `SHAPES_PATH` | `ontology/shapes.ttl` | SHACL shapes file path |
+| `RDF_STORE_PATH` | `data/knowledge_graph.ttl` | Path to persist the knowledge graph |
 | `CORS_ORIGINS` | `["*"]` | Allowed CORS origins |
 
 ---
