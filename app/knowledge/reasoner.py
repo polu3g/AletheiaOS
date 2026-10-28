@@ -132,6 +132,37 @@ BUILT_IN_RULES: list[dict[str, Any]] = [
             }
         """,
     },
+    {
+        "name": "propagate_actions_to_inference_type",
+        "description": (
+            "Lift requiresAction triples from observation nodes to their inference-type concept. "
+            "After this rule fires, ale:road_slippery ale:requiresAction ale:reduce_speed is "
+            "directly queryable without needing to traverse observation nodes."
+        ),
+        "construct": """
+            CONSTRUCT { ?inferenceType ale:requiresAction ?action }
+            WHERE {
+                ?obs a ale:Observation ;
+                     ale:hasInference ?inferenceType ;
+                     ale:requiresAction ?action .
+            }
+        """,
+    },
+    {
+        "name": "propagate_priority_to_inference_type",
+        "description": (
+            "Lift hasPriority triples from observation nodes to their inference-type concept. "
+            "Enables direct queries like 'what priority does emergency_alert have'."
+        ),
+        "construct": """
+            CONSTRUCT { ?inferenceType ale:hasPriority ?priority }
+            WHERE {
+                ?obs a ale:Observation ;
+                     ale:hasInference ?inferenceType ;
+                     ale:hasPriority ?priority .
+            }
+        """,
+    },
 ]
 
 

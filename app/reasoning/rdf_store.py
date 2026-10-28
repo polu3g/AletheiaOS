@@ -141,10 +141,59 @@ class RDFStore:
 _store: RDFStore | None = None
 
 
+def _seed_domain_knowledge(store: RDFStore) -> None:
+    """
+    Assert static domain knowledge from the plan library into the RDF graph.
+
+    This runs once on first access so queries like
+      'What actions should I take for a slippery road?'
+    return answers immediately — no prior cognitive processing required.
+    """
+    from app.planning.planner import _PLAN_LIBRARY
+    from rdflib import Literal, Namespace
+
+    ALE = Namespace("http://aletheia.ai/ontology#")
+    RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
+    RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+
+    priority_map = {
+        "CRITICAL": ALE["CRITICAL"],
+        "HIGH":     ALE["HIGH"],
+        "MEDIUM":   ALE["MEDIUM"],
+        "LOW":      ALE["LOW"],
+    }
+
+    for condition, plan in _PLAN_LIBRARY.items():
+        cond_uri = ALE[condition]
+
+        # Type: Condition
+        store.graph.add((cond_uri, RDF["type"], ALE["Condition"]))
+        # Label
+        store.graph.add((cond_uri, RDFS["label"], Literal(condition.replace("_", " ").title())))
+        # Priority
+        priority = plan.get("priority", "LOW")
+        store.graph.add((cond_uri, ALE["hasPriority"], priority_map.get(priority, ALE[priority])))
+        # Rationale
+        store.graph.add((cond_uri, ALE["rationale"], Literal(plan.get("rationale", ""))))
+        # Required actions
+        for action in plan.get("actions", []):
+            action_uri = ALE[action]
+            store.graph.add((cond_uri, ALE["requiresAction"], action_uri))
+            store.graph.add((action_uri, RDF["type"], ALE["Action"]))
+            store.graph.add((action_uri, RDFS["label"], Literal(action.replace("_", " ").title())))
+
+    logger.info(
+        "Domain knowledge seeded: %d conditions, %d triples total",
+        len(_PLAN_LIBRARY),
+        len(store.graph),
+    )
+
+
 def get_rdf_store() -> RDFStore:
     global _store
     if _store is None:
         from app.config import get_settings
         _store = RDFStore()
         _store.load_ontology(get_settings().ontology_path)
+        _seed_domain_knowledge(_store)
     return _store

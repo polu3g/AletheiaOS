@@ -13,10 +13,72 @@ from __future__ import annotations
 import json
 import logging
 import re
+import ssl
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+def _build_ssl_context() -> ssl.SSLContext:
+    """
+    Build an SSL context for external HTTP calls.
+
+    Priority order:
+      1. SSL_CA_BUNDLE env var  — point to a corporate CA bundle (.pem)
+      2. certifi                — cross-platform CA bundle (fixes macOS)
+      3. ssl.CERT_NONE          — when SSL_VERIFY=false (corporate proxy)
+      4. Default system context  — fallback
+
+    Set in .env:
+      SSL_VERIFY=false          # disable verification (corporate SSL inspection)
+      SSL_CA_BUNDLE=/path/ca.pem # add corporate CA instead of disabling
+    """
+    from app.config import get_settings
+    cfg = get_settings()
+
+    if not cfg.ssl_verify:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        logger.warning(
+            "SSL verification DISABLED (SSL_VERIFY=false). "
+            "This is insecure outside of a trusted corporate network."
+        )
+        return ctx
+
+    # Custom corporate CA bundle takes priority over certifi
+    ca_bundle = cfg.ssl_ca_bundle
+    if not ca_bundle:
+        try:
+            import certifi
+            ca_bundle = certifi.where()
+            logger.debug("SSL: using certifi CA bundle at %s", ca_bundle)
+        except ImportError:
+            logger.debug("SSL: certifi not available, using system default")
+
+    if ca_bundle:
+        return ssl.create_default_context(cafile=ca_bundle)
+    return ssl.create_default_context()
+
+
+_ssl_configured = False
+
+
+def _ensure_ssl_opener() -> None:
+    """Install the configured SSL context once, on first external call."""
+    global _ssl_configured
+    if _ssl_configured:
+        return
+    try:
+        ctx = _build_ssl_context()
+        urllib.request.install_opener(
+            urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+        )
+        _ssl_configured = True
+    except Exception as exc:
+        logger.debug("SSL opener setup failed, using default: %s", exc)
+        _ssl_configured = True  # don't retry
 
 # ── Wikidata ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +144,7 @@ class WikidataEnricher:
 
     def fetch_sparql(self, sparql: str) -> dict:
         """Run arbitrary Wikidata SPARQL and ingest results as ale: triples."""
+        _ensure_ssl_opener()
         try:
             from SPARQLWrapper import JSON, SPARQLWrapper
 
@@ -197,6 +260,7 @@ class ConceptNetEnricher:
         Example: concept='road' fetches relations like:
           road IsA path, road UsedFor travel, road HasProperty paved ...
         """
+        _ensure_ssl_opener()
         try:
             import httpx
 
@@ -229,6 +293,7 @@ class ConceptNetEnricher:
         limit: int = 50,
     ) -> dict:
         """Fetch edges for a specific relation type, optionally filtered by start concept."""
+        _ensure_ssl_opener()
         try:
             import httpx
 
@@ -300,6 +365,7 @@ class URLEnricher:
 
     def enrich_from_url(self, url: str, timeout: int = 15) -> dict:
         """Fetch a URL and extract all JSON-LD structured data."""
+        _ensure_ssl_opener()
         try:
             import httpx
             from rdflib import Graph

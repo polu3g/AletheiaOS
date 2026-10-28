@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # Pagination defaults
     default_page_limit: int = 100
 
+    # External HTTP / SSL
+    # Set SSL_VERIFY=false in .env when behind a corporate proxy that does
+    # SSL inspection (self-signed certificate in certificate chain errors).
+    # Set SSL_CA_BUNDLE=/path/to/corp-ca.pem to add a custom CA instead.
+    ssl_verify: bool = True
+    ssl_ca_bundle: str | None = None
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

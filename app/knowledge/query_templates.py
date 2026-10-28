@@ -84,9 +84,18 @@ TEMPLATES: list[dict[str, Any]] = [
         "description": "What actions are required for a given condition?",
         "trigger_keywords": {"actions", "do", "handle", "should", "required", "recommended", "need"},
         "requires_entity": True,
+        # Two paths to find actions:
+        #   1. Direct: the concept itself has requiresAction (after propagation rule fires)
+        #   2. Via observations: any obs of that inference type has requiresAction
         "sparql": """
-            SELECT ?action WHERE {{
-                ale:{entity} ale:requiresAction ?action .
+            SELECT DISTINCT ?action WHERE {{
+                {{
+                    ale:{entity} ale:requiresAction ?action .
+                }} UNION {{
+                    ?obs a ale:Observation ;
+                         ale:hasInference ale:{entity} ;
+                         ale:requiresAction ?action .
+                }}
             }}
         """,
         "result_label": "required_actions",
@@ -184,10 +193,16 @@ TEMPLATES: list[dict[str, Any]] = [
         "description": "What priority is assigned to a given condition?",
         "trigger_keywords": {"priority", "severity", "urgent", "level"},
         "requires_entity": True,
+        # Check both the concept directly (after propagation rule) and via observations
         "sparql": """
-            SELECT ?obs ?priority WHERE {{
-                ?obs ale:hasInference ale:{entity} ;
-                     ale:hasPriority ?priority .
+            SELECT DISTINCT ?priority WHERE {{
+                {{
+                    ale:{entity} ale:hasPriority ?priority .
+                }} UNION {{
+                    ?obs a ale:Observation ;
+                         ale:hasInference ale:{entity} ;
+                         ale:hasPriority ?priority .
+                }}
             }} LIMIT 10
         """,
         "result_label": "priorities",
@@ -235,6 +250,14 @@ TEMPLATES: list[dict[str, Any]] = [
         "example": "What named entities are in the knowledge graph?",
     },
 ]
+
+def _shorten_uri(value: str) -> str:
+    """Collapse a full URI to its local name; leave literals and short names unchanged."""
+    for sep in ("#", "/"):
+        if sep in value:
+            return value.rsplit(sep, 1)[-1]
+    return value
+
 
 # Stop words to exclude from keyword matching
 _STOP = {
@@ -307,6 +330,12 @@ class TemplateQueryEngine:
                 "error": str(exc),
                 "generated_sparql": sparql,
             }
+
+        # Shorten full URIs to readable local names in every result row
+        result["rows"] = [
+            {col: _shorten_uri(val) for col, val in row.items()}
+            for row in result["rows"]
+        ]
 
         return {
             "matched": True,
