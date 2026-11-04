@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from typing import Any
@@ -15,6 +16,8 @@ from app.reasoning.rdf_store import get_rdf_store
 from app.world_model.state import WorldModelService
 
 logger = logging.getLogger(__name__)
+_NEGATION_WORDS = {"no", "not", "never", "without"}
+_NEGATION_AUXILIARIES = {"am", "are", "be", "been", "being", "is", "was", "were"}
 
 # ── Inference rule table ────────────────────────────────────────────────────
 # Each entry: (required_keywords, excluded_keywords, inference_type, confidence)
@@ -61,12 +64,27 @@ def _match_rules(text: str) -> list[tuple[str, float, str]]:
 
     Returns list of (inference_type, confidence, matched_rule_description).
     """
-    lower = text.lower()
+    words = re.findall(r"\w+", text.casefold())
+
+    def contains_phrase(phrase: str) -> bool:
+        phrase_words = re.findall(r"\w+", phrase.casefold())
+        width = len(phrase_words)
+        for start in range(len(words) - width + 1):
+            preceding = words[max(0, start - 2) : start]
+            negated = bool(preceding and preceding[-1] in _NEGATION_WORDS) or (
+                len(preceding) == 2
+                and preceding[0] in _NEGATION_AUXILIARIES
+                and preceding[1] in _NEGATION_WORDS
+            )
+            if words[start : start + width] == phrase_words and not negated:
+                return True
+        return False
+
     matches: list[tuple[str, float, str]] = []
 
     for required, excluded, inference, confidence in _RULES:
-        if all(kw in lower for kw in required):
-            if not any(kw in lower for kw in excluded):
+        if all(contains_phrase(kw) for kw in required):
+            if not any(contains_phrase(kw) for kw in excluded):
                 rule_desc = f"keywords={required}"
                 matches.append((inference, confidence, rule_desc))
 

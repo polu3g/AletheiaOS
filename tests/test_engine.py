@@ -45,6 +45,19 @@ def test_rule_matching(text: str, expected_inference: str):
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    ["There is no fog", "The road is not icy", "A firefighter is nearby"],
+)
+def test_rule_matching_avoids_negation_and_substring_false_positives(text: str):
+    assert _match_rules(text)[0][0] == "general_observation"
+
+
+@pytest.mark.parametrize("text", ["Fog reducing visibility", "Not only foggy conditions"])
+def test_rule_matching_keeps_positive_keyword_matches(text: str):
+    assert _match_rules(text)[0][0] == "low_visibility"
+
+
 def test_wet_road_inference(engine: CognitiveEngine):
     result = engine.process("road is wet")
     assert result["primary_inference"]["type"] == "road_slippery"

@@ -87,55 +87,88 @@ AletheiaOS/
 
 ---
 
-## Quick Start (Local)
+## Development Setup
 
 ### Prerequisites
 
 - Python 3.11+
 - pip
 
-### 1. Clone and install
+### 1. Clone and create a virtual environment
 
 ```bash
 git clone https://github.com/yourusername/AletheiaOS.git
 cd AletheiaOS
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 2. Configure environment (optional)
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
-# Edit .env if you want non-default settings
 ```
 
-### 3. Start the development server
+The defaults use SQLite and the local ontology and RDF files. Edit `.env` to change
+settings for your local environment.
+
+### 3. Run the development server
 
 ```bash
-# Using Makefile (auto-detects correct Python)
-make dev
-
-# Or directly — use the Python that has the packages installed
-python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 4. Open Swagger UI
+Open **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)** for Swagger UI.
+Install development tools into the active virtual environment with
+`python -m pip install ruff mypy`. Run the test suite with `python -m pytest`.
 
-Navigate to **[http://localhost:8000/docs](http://localhost:8000/docs)**
+## Production Setup (Docker Compose)
 
-The interactive Swagger UI lists every endpoint with schemas, examples, and a **Try it out** button.
+### Prerequisites
 
----
+- Docker Engine with the Docker Compose plugin
 
-## Docker
+From the repository root, build and start the API and RDF4J services:
 
 ```bash
-# Build and start all services (AletheiaOS API + RDF4J Workbench)
-make docker-build
-make docker-up
+docker compose build --pull
+docker compose up -d
+docker compose ps
+```
 
-# AletheiaOS API  → http://localhost:8000/docs
-# RDF4J Workbench → http://localhost:8080/rdf4j-workbench
+The API is available at `http://localhost:8000`; its Swagger UI is at
+`http://localhost:8000/docs`. The optional RDF4J Workbench is at
+`http://localhost:8080/rdf4j-workbench`.
+
+The Compose configuration sets `DEBUG=false` and `LOG_LEVEL=INFO`. It persists
+application data under `./data`, reads ontology files from `./ontology`, and
+stores RDF4J data in a named Docker volume. Back up `./data` and the RDF4J volume
+according to your deployment's recovery requirements. `docker compose down`
+stops and removes the containers but retains these persisted files and volumes;
+`docker compose down -v` also removes the RDF4J volume.
+
+### Production deployment notes
+
+The included Compose file is a single-host starting point, not a fully hardened
+public deployment. It publishes ports `8000` and `8080` on the host. Restrict
+access to these ports with your network firewall, put the API behind a
+TLS-terminating reverse proxy, and do not expose the RDF4J Workbench publicly.
+Review the Compose `environment` values and CORS policy for your deployment
+before launch; a host `.env` file is not automatically injected into the
+container by the current Compose configuration. The Dockerfile copies the
+project tree into the image, so do not put production secrets in a root `.env`
+file when building; inject secrets through your deployment platform instead.
+The default database is SQLite, so assess its concurrency and backup needs
+before using this setup for a multi-instance deployment.
+
+Useful operations:
+
+```bash
+docker compose logs -f app   # Follow API logs
+docker compose restart app   # Restart the API
+docker compose down          # Stop services; keep persistent data
 ```
 
 ---
@@ -143,8 +176,8 @@ make docker-up
 ## Running Tests
 
 ```bash
-make test           # all 133 tests
-make test-unit      # engine, memory, reasoning, knowledge only
+make test           # run all tests
+make test-unit      # engine, memory, and reasoning tests
 make test-api       # API integration tests only
 make test-cov       # with HTML coverage report → htmlcov/index.html
 ```
