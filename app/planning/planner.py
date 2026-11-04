@@ -95,7 +95,12 @@ class GoalPlanner:
     an ordered action list, and a human-readable rationale.
     """
 
-    def plan(self, goal: str, context: dict[str, Any] | None = None) -> dict:
+    def plan(
+        self,
+        goal: str,
+        context: dict[str, Any] | None = None,
+        learned_actions: list[str] | None = None,
+    ) -> dict:
         template = _PLAN_LIBRARY.get(goal, _PLAN_LIBRARY["general_observation"])
         actions = list(template["actions"])
 
@@ -106,6 +111,10 @@ class GoalPlanner:
                 actions.insert(0, "reduce_speed")
             if context.get("passengers_aboard") and "alert_passengers" not in actions:
                 actions.append("alert_passengers")
+
+        for action in learned_actions or []:
+            if action not in actions:
+                actions.append(action)
 
         return {
             "goal": goal,

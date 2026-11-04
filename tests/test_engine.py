@@ -87,6 +87,71 @@ def test_world_model_updated(engine: CognitiveEngine):
     assert result["world_model_updated"] is True
 
 
+def test_night_context_refines_low_visibility_plan(engine: CognitiveEngine):
+    class ContextAwareStub:
+        def predict(
+            self,
+            text: str,
+            context: dict | None = None,
+        ) -> tuple[str, float, list[str]]:
+            actions = (
+                ["increase_following_distance"]
+                if context and context.get("time_of_day") == "night"
+                else []
+            )
+            return "low_visibility", 0.99, actions
+
+    engine.neural_model = ContextAwareStub()
+    text = "The road is wet and visibility is poor due to heavy rain"
+    daytime = engine.process(text, context={"time_of_day": "day"})
+    nighttime = engine.process(text, context={"time_of_day": "night"})
+
+    assert daytime["primary_inference"]["type"] == nighttime["primary_inference"]["type"]
+    assert "increase_following_distance" not in daytime["plan"]["actions"]
+    assert "increase_following_distance" in nighttime["plan"]["actions"]
+
+
 def test_default_observation_fallback(engine: CognitiveEngine):
     result = engine.process("Weather is mild today")
     assert result["primary_inference"]["type"] == "general_observation"
+
+
+def test_neural_prediction_fills_rule_fallback(engine: CognitiveEngine):
+    class StubModel:
+        def predict(
+            self,
+            text: str,
+            context: dict | None = None,
+        ) -> tuple[str, float, list[str]]:
+            return "traffic_congestion", 0.88, []
+
+    engine.neural_model = StubModel()
+    result = engine.process("Vehicles are moving slowly in a queue")
+
+    assert result["primary_inference"] == {
+        "type": "traffic_congestion",
+        "confidence": 0.88,
+        "rule": "neural_model",
+    }
+
+
+def test_symbolic_rule_keeps_precedence_over_neural_prediction(engine: CognitiveEngine):
+    class StubModel:
+        def predict(
+            self,
+            text: str,
+            context: dict | None = None,
+        ) -> tuple[str, float, list[str]]:
+            return "emergency_alert", 0.95, ["trigger_emergency_protocol"]
+
+    engine.neural_model = StubModel()
+    result = engine.process("Fog is reducing visibility")
+
+    assert result["primary_inference"]["type"] == "low_visibility"
+    assert result["secondary_inferences"] == [
+        {
+            "type": "emergency_alert",
+            "confidence": 0.95,
+            "rule": "neural_model",
+        }
+    ]

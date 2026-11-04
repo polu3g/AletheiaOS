@@ -13,9 +13,8 @@ class Settings(BaseSettings):
     app_name: str = "AletheiaOS"
     app_version: str = "1.0.0"
     app_description: str = (
-        "AletheiaOS — a neuro-symbolic cognitive architecture integrating episodic "
-        "memory, semantic reasoning, formal constraint solving (Z3), SHACL validation, "
-        "RDF knowledge graphs, and goal-directed planning."
+        "AletheiaOS — a neural-symbolic cognitive architecture combining a trainable "
+        "PyTorch classifier with rule-based inference, semantic memory, Z3, RDF, and planning."
     )
     debug: bool = False
     log_level: str = "INFO"
@@ -27,6 +26,8 @@ class Settings(BaseSettings):
     ontology_path: str = str(BASE_DIR / "ontology" / "aletheia.owl")
     shapes_path: str = str(BASE_DIR / "ontology" / "shapes.ttl")
     rdf_store_path: str = str(BASE_DIR / "data" / "rdf_store.ttl")
+    cognitive_model_path: str = str(BASE_DIR / "data" / "cognitive_model.pt")
+    neural_confidence_threshold: float = 0.65
 
     # CORS
     cors_origins: list[str] = ["*"]

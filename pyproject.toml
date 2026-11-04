@@ -5,7 +5,7 @@ build-backend = "setuptools.backends.legacy:build"
 [project]
 name = "aletheia-os"
 version = "1.0.0"
-description = "Neuro-symbolic cognitive architecture — FastAPI + Z3 + RDF/OWL + SHACL"
+description = "Neural-symbolic cognitive architecture — PyTorch + FastAPI + Z3 + RDF/OWL + SHACL"
 requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}

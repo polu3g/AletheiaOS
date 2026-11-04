@@ -8,6 +8,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.cognitive.neural_model import get_neural_model
+from app.config import get_settings
 from app.logging.trace import TraceService
 from app.memory.episodic import EpisodicMemoryService
 from app.memory.semantic import SemanticMemoryService
@@ -102,10 +104,10 @@ def _match_rules(text: str) -> list[tuple[str, float, str]]:
 
 class CognitiveEngine:
     """
-    Neuro-symbolic cognitive processing engine.
+    Neural-symbolic cognitive processing engine.
 
     Pipeline per invocation:
-    1. Perception      — rule-based inference extraction from natural language
+    1. Perception      — neural classification with rule-based inference precedence
     2. Memory storage  — episodic event + semantic facts persisted to DB
     3. RDF assertion   — observation added to the knowledge graph
     4. Planning        — goal-directed action sequence generated
@@ -121,6 +123,9 @@ class CognitiveEngine:
         self.world = WorldModelService(db)
         self.planner = GoalPlanner()
         self.rdf = get_rdf_store()
+        settings = get_settings()
+        self.neural_model = get_neural_model(settings.cognitive_model_path)
+        self.neural_confidence_threshold = settings.neural_confidence_threshold
 
     def process(
         self,
@@ -133,6 +138,23 @@ class CognitiveEngine:
 
         # ── 1. Perception ────────────────────────────────────────────────────
         all_inferences = _match_rules(text)
+        neural_actions: list[str] = []
+        neural_prediction = self.neural_model.predict(text, context)
+        if neural_prediction is not None:
+            neural_label, neural_confidence, predicted_actions = neural_prediction
+            if neural_confidence >= self.neural_confidence_threshold:
+                if all_inferences[0][0] == "general_observation":
+                    all_inferences[0] = (
+                        neural_label,
+                        neural_confidence,
+                        "neural_model",
+                    )
+                if all_inferences[0][0] == neural_label:
+                    neural_actions = predicted_actions
+                else:
+                    all_inferences.append(
+                        (neural_label, neural_confidence, "neural_model")
+                    )
         primary_inf, primary_conf, primary_rule = all_inferences[0]
         secondary = [
             {"type": inf, "confidence": conf, "rule": rule}
@@ -169,7 +191,7 @@ class CognitiveEngine:
         )
 
         # ── 5. Planning ───────────────────────────────────────────────────────
-        plan = self.planner.plan(primary_inf, context)
+        plan = self.planner.plan(primary_inf, context, learned_actions=neural_actions)
 
         # ── 6. World model ────────────────────────────────────────────────────
         world_updates = {

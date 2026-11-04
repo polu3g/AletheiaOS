@@ -8,7 +8,7 @@ UVICORN    := $(PYTHON) -m uvicorn
 APP        := app.main:app
 PORT       := 8000
 
-.PHONY: help install dev test test-cov lint format clean \
+.PHONY: help install train-model dev test test-cov lint format clean \
         docker-build docker-up docker-down logs shell
 
 help:  ## Show this help message
@@ -22,6 +22,9 @@ install:  ## Install all Python dependencies
 
 install-dev:  ## Install with dev extras (ruff, mypy)
 	$(PIP) install -r requirements.txt ruff mypy
+
+train-model:  ## Train the cognitive text classifier
+	$(PYTHON) -m app.cognitive.train_model
 
 # ── Development ────────────────────────────────────────────────────────────────
 

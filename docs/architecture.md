@@ -2,7 +2,7 @@
 
 ## Overview
 
-AletheiaOS is a **neuro-symbolic cognitive architecture** that combines rule-based symbolic reasoning with formal logic tools (Z3, SHACL, RDF/OWL) inside a production-grade FastAPI service.
+AletheiaOS is a **neural-symbolic cognitive architecture** that combines a trainable PyTorch text classifier with rule-based symbolic reasoning and formal logic tools (Z3, SHACL, RDF/OWL) inside a FastAPI service.
 
 ---
 
@@ -11,7 +11,7 @@ AletheiaOS is a **neuro-symbolic cognitive architecture** that combines rule-bas
 ```mermaid
 flowchart LR
     Input([Natural Language Input])
-    Perception[Perception\nRule-Based Inference]
+    Perception[Neural + Rule-Based\nInference]
     Episodic[(Episodic Memory\nSQLite)]
     Semantic[(Semantic Memory\nSQLite)]
     RDF[(RDF Knowledge Graph\nrdflib)]
@@ -34,13 +34,22 @@ flowchart LR
 
 | Stage | Component | What it does |
 |-------|-----------|--------------|
-| **1. Perception** | `CognitiveEngine` | Applies 25+ inference rules to extract symbolic conclusions from text |
+| **1. Perception** | `CognitiveEngine` | Uses confidence-gated PyTorch classification when rules do not match; explicit rule matches take precedence |
 | **2. Episodic Memory** | `EpisodicMemoryService` | Stores raw event + inference in time-ordered DB table |
 | **3. Semantic Memory** | `SemanticMemoryService` | Stores RDF-style (subject, predicate, object) facts |
 | **4. RDF Assertion** | `RDFStore` | Adds observation triple to in-process knowledge graph |
 | **5. Planning** | `GoalPlanner` | Maps primary inference → prioritised action sequence |
 | **6. World Model** | `WorldModelService` | Merges environment key-values into persistent state |
 | **7. Trace Logging** | `TraceService` | Writes full processing record with timing |
+
+The neural model is trained with `python -m app.cognitive.train_model`. Its
+checkpoint defaults to `data/cognitive_model.pt`; until that file exists, the
+engine continues with rule-based inference. Training examples may include
+context features and labeled action recommendations. At runtime, the model
+predicts both a condition and context-sensitive actions; the planner merges
+the learned actions with its symbolic condition plan. No day/night branch is
+hardcoded in the planner. When a rule and model disagree, the rule remains
+primary and the neural suggestion is retained as a secondary inference.
 
 ---
 
